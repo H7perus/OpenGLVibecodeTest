@@ -44,4 +44,4 @@ sdl3 provides CMake targets:
   find_package(SDL3 CONFIG REQUIRED)
   target_link_libraries(main PRIVATE SDL3::SDL3)
 
-All requested installations completed successfully in: 1.32 ms
+All requested installations completed successfully in: 1.75 ms

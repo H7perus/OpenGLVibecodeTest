@@ -33,9 +33,9 @@ int main(int argc, char* argv[]) {
     Texture texture("assets/textures/container2.png");
     
     float vertices[] = {
-        -0.5f, -0.5f, 0.0f,  1.0f, 0.0f, 0.0f,  0.0f, 0.0f,
-         0.5f, -0.5f, 0.0f,  0.0f, 1.0f, 0.0f,  1.0f, 1.0f,
-         0.0f,  0.5f, 0.0f,  0.0f, 0.0f, 1.0f,  0.5f, 0.5f
+        -0.5f, -0.5f, 0.0f,  0.0f, 0.0f, 0.0f,  0.0f, 0.0f,
+         0.5f, -0.5f, 0.0f,  1.0f, 0.0f, 0.0f,  1.0f, 0.0f,
+         0.0f,  0.5f, 0.0f,  0.5f, 1.0f, 0.0f,  0.5f, 1.0f
     };
     
     unsigned int VBO, VAO;

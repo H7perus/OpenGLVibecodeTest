@@ -423,6 +423,7 @@ if %errorlevel% neq 0 goto :VCEnd</Command>
   <ItemGroup>
     <ClCompile Include="C:\Users\raket\source\repos\OpenGLVibecodeTest\main.cpp" />
     <ClCompile Include="C:\Users\raket\source\repos\OpenGLVibecodeTest\src\Shader.cpp" />
+    <ClCompile Include="C:\Users\raket\source\repos\OpenGLVibecodeTest\src\Texture.cpp" />
   </ItemGroup>
   <ItemGroup />
   <ItemGroup>

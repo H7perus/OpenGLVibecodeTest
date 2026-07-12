@@ -7,6 +7,9 @@
     <ClCompile Include="C:\Users\raket\source\repos\OpenGLVibecodeTest\src\Shader.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="C:\Users\raket\source\repos\OpenGLVibecodeTest\src\Texture.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <CustomBuild Include="C:\Users\raket\source\repos\OpenGLVibecodeTest\CMakeLists.txt" />

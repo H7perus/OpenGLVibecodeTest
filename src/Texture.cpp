@@ -3,6 +3,8 @@
 #include <fstream>
 #include <vector>
 #include <string>
+#include <glad/glad.h>
+#define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
 Texture::Texture(const std::string& path) {
@@ -20,10 +22,10 @@ unsigned int Texture::loadTexture(const std::string& path) {
     glGenTextures(1, &textureID);
     glBindTexture(GL_TEXTURE_2D, textureID);
 
-    GLbool alpha;
-    unsigned int width, height, nrChannels;
+    int alpha;
+    int width, height, nrChannels;
     stbi_set_flip_vertically_on_load(true);
-    unsigned char* data = stbi_load(path.c_str(), &width, &height, &nrChannels, &alpha);
+    unsigned char* data = stbi_load(path.c_str(), &width, &height, &nrChannels, 0);
 
     if (data == nullptr) {
         std::cerr << "Failed to load texture at: " << path << std::endl;
