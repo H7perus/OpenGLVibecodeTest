@@ -1,0 +1,3 @@
+C:/Users/raket/source/repos/OpenGLVibecodeTest/build/CMakeFiles/OpenGLTriangle.dir
+C:/Users/raket/source/repos/OpenGLVibecodeTest/build/CMakeFiles/ALL_BUILD.dir
+C:/Users/raket/source/repos/OpenGLVibecodeTest/build/CMakeFiles/ZERO_CHECK.dir

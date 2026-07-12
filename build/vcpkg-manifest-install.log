@@ -1,0 +1,47 @@
+Detecting compiler hash for triplet x64-windows...
+Compiler found: C:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.51.36231/bin/Hostx64/x64/cl.exe
+The following packages are already installed:
+  * egl-registry:x64-windows@2025-05-27
+    glad[core,loader]:x64-windows@0.1.36
+    opengl:x64-windows@2022-12-04#3
+  * opengl-registry:x64-windows@2026-01-26
+    sdl3:x64-windows@3.4.0
+  * vcpkg-cmake:x64-windows@2024-04-23
+  * vcpkg-cmake-config:x64-windows@2024-05-23
+glad provides CMake targets:
+
+  # this is heuristically generated, and may not be correct
+  find_package(glad CONFIG REQUIRED)
+  target_link_libraries(main PRIVATE glad::glad)
+
+The package opengl is compatible with built-in CMake targets via CMake v3.7 and prior syntax
+
+    find_package(OpenGL REQUIRED)
+    target_link_libraries(main PRIVATE ${OPENGL_LIBRARIES})
+    target_include_directories(main PRIVATE ${OPENGL_INCLUDE_DIR})
+
+and the CMake v3.8 and beyond imported target syntax
+
+    find_package(OpenGL REQUIRED)
+    target_link_libraries(main PRIVATE OpenGL::GL)
+
+introduction of various components
+
+    find_package(OpenGL REQUIRED COMPONENTS GL      # v3.8
+                                            GLU     # v3.8
+                                            GLX     # v3.10
+                                            EGL     # v3.10
+                                            OpenGL) # v3.10
+
+The OpenGL SDK is highly platform dependent and is usually an OS component. It's not realistic to build from source for every platform.
+
+    WINDOWS: is part of the Windows SDK which this package installs.
+    LINUX: the SDK may be installed from your distro's repo or from 3rd parties manually. There are too many to count.
+    APPLE: consult your distribution vendor on the state of OpenGL support: https://support.apple.com/en-us/HT202823
+
+sdl3 provides CMake targets:
+
+  find_package(SDL3 CONFIG REQUIRED)
+  target_link_libraries(main PRIVATE SDL3::SDL3)
+
+All requested installations completed successfully in: 1.32 ms
