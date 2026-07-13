@@ -1,10 +1,35 @@
 #version 460 core
-in vec3 ourColor;
 in vec2 TexCoord;
+in vec3 FragPos;
+in vec3 Normal;
 out vec4 FragColor;
 
 uniform sampler2D ourTexture;
+uniform sampler2D ourSpecular;
+uniform vec3 lightPos;
+uniform vec3 viewPos;
 
 void main() {
-    FragColor = texture(ourTexture, TexCoord);
+    vec3 normal = normalize(Normal);
+    vec3 lightDir = normalize(lightPos - FragPos);
+    vec3 viewDir = normalize(viewPos - FragPos);
+    
+    // Ambient
+    float ambientStrength = 0.1;
+    vec3 ambient = ambientStrength * vec3(1.0);
+    
+    // Diffuse
+    float diff = max(dot(normal, lightDir), 0.0);
+    vec3 diffuse = diff * vec3(1.0);
+    
+    // Specular (Blinn-Phong)
+    vec3 halfwayDir = normalize(lightDir + viewDir);
+    float spec = pow(max(dot(normal, halfwayDir), 0.0), 64.0);
+    vec4 specularMap = texture(ourSpecular, TexCoord);
+    vec3 specular = spec * specularMap.rgb * 1.5;
+    
+    vec4 texColor = texture(ourTexture, TexCoord);
+    vec3 result = (ambient + diffuse + specular) * texColor.rgb;
+    
+    FragColor = vec4(result, texColor.a);
 }
