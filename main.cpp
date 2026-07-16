@@ -8,6 +8,7 @@
 #include <glm/gtc/type_ptr.hpp>
 #include "include/Shader.hpp"
 #include "include/Texture.hpp"
+#include "include/Model.hpp"
 
 int main(int argc, char* argv[]) {
     if (!SDL_Init(SDL_INIT_VIDEO)) {
@@ -36,6 +37,8 @@ int main(int argc, char* argv[]) {
     Shader shader("shaders/vertex.glsl", "shaders/fragment.glsl");
     Texture texture("assets/textures/container2.png");
     Texture specularTexture("assets/textures/container2_specular.png");
+
+    Model model("assets/models/char.gltf");
 
     std::vector<float> vertices;
     // Each face: 4 vertices (pos_x, pos_y, pos_z, tex_x, tex_y, norm_x, norm_y, norm_z)
@@ -87,7 +90,6 @@ int main(int argc, char* argv[]) {
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
 
-
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
@@ -95,7 +97,7 @@ int main(int argc, char* argv[]) {
     glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(5 * sizeof(float)));
     glEnableVertexAttribArray(2);
 
-    glm::mat4 model = glm::mat4(1.0f);
+    glm::mat4 modelMatrix = glm::mat4(1.0f);
     glm::mat4 view = glm::mat4(1.0f);
     glm::mat4 projection = glm::mat4(1.0f);
 
@@ -129,15 +131,18 @@ int main(int argc, char* argv[]) {
         float deltaTime = (SDL_GetTicks() - lastTick) / 1000.0f;
         lastTick = SDL_GetTicks();
 
-        model = glm::rotate(model, 0.2f * deltaTime, glm::vec3(0.0f, 1.0f, 0.0f));
-        model = glm::rotate(model, 0.2f * deltaTime, glm::vec3(1.0f, 0.0f, 0.0f));
+        modelMatrix = glm::rotate(modelMatrix, 0.2f * deltaTime, glm::vec3(0.0f, 1.0f, 0.0f));
+        modelMatrix = glm::rotate(modelMatrix, 0.2f * deltaTime, glm::vec3(1.0f, 0.0f, 0.0f));
 
-        glUniformMatrix4fv(glGetUniformLocation(shader.ID, "model"), 1, GL_FALSE, glm::value_ptr(model));
+        glUniformMatrix4fv(glGetUniformLocation(shader.ID, "model"), 1, GL_FALSE, glm::value_ptr(modelMatrix));
         glUniformMatrix4fv(glGetUniformLocation(shader.ID, "view"), 1, GL_FALSE, glm::value_ptr(view));
         glUniformMatrix4fv(glGetUniformLocation(shader.ID, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
 
-        glBindVertexArray(VAO);
-        glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
+        model.Draw(shader.ID);
+
+        // Manual cube draw calls commented out as we are using the loaded model
+        // glBindVertexArray(VAO);
+        // glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
 
         SDL_GL_SwapWindow(window);
     }
