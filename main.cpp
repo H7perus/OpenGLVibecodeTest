@@ -6,9 +6,24 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include "imgui.h"
+#include "imgui_impl_sdl3.h"
+#include "imgui_impl_opengl3.h"
 #include "include/Shader.hpp"
 #include "include/Texture.hpp"
 #include "include/Model.hpp"
+
+// Create ImGui context at startup
+static ImGuiContext* g_pImGuiCtx = nullptr;
+
+// Global UI state variables (moved from window scope to prevent crashes)
+static float rotSpeedX = 0.2f;
+static float rotSpeedY = 0.2f;
+static float camDist = 3.0f;
+static float lightHeight = 5.0f;
+static float viewDistance = 3.0f;
+static bool showGrid = false;
+static bool useSpecular = true;
 
 int main(int argc, char* argv[]) {
     if (!SDL_Init(SDL_INIT_VIDEO)) {
@@ -16,7 +31,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    SDL_Window* window = SDL_CreateWindow("OpenGL Cube", 800, 600, SDL_WINDOW_OPENGL);
+    SDL_Window* window = SDL_CreateWindow("OpenGL Cube with ImGui", 800, 600, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
     if (!window) {
         std::cerr << "Window Creation Error: " << SDL_GetError() << std::endl;
         return 1;
@@ -32,6 +47,22 @@ int main(int argc, char* argv[]) {
         std::cerr << "Failed to initialize GLAD" << std::endl;
         return 1;
     }
+
+    // Create and setup ImGui context
+    g_pImGuiCtx = ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO();
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+
+    // Add default font and build atlas before initializing backends
+    io.Fonts->AddFontDefault();
+    io.Fonts->Build();
+
+    // Initialize ImGui with SDL3 OpenGL backend
+    if (!ImGui_ImplSDL3_InitForOpenGL(window, context)) {
+        std::cerr << "Failed to initialize ImGui SDL3 backend" << std::endl;
+        return 1;
+    }
+    ImGui_ImplOpenGL3_Init("#version 150");
 
     glEnable(GL_DEPTH_TEST);
     Shader shader("shaders/vertex.glsl", "shaders/fragment.glsl");
@@ -120,23 +151,43 @@ int main(int argc, char* argv[]) {
     Uint64 lastTick = SDL_GetTicks();
 
     while (running) {
+        // Handle events and process them through ImGui
+        SDL_Event event;
         while (SDL_PollEvent(&event)) {
-            if (event.type == SDL_EVENT_QUIT) {
+            ImGui_ImplSDL3_ProcessEvent(&event);
+            if (event.type == SDL_EVENT_QUIT || 
+                event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED) {
                 running = false;
             }
         }
 
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+        // Start ImGui frame (SDL3 + OpenGL3 backend handles rendering)
+        ImGui_ImplSDL3_NewFrame();
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui::NewFrame();
+
+        // Build font atlas if not already built
+        ImGuiIO& io = ImGui::GetIO();
+        if (!io.Fonts->IsBuilt()) {
+            io.Fonts->AddFontDefault();
+            io.Fonts->Build();
+        }
+
         float deltaTime = (SDL_GetTicks() - lastTick) / 1000.0f;
         lastTick = SDL_GetTicks();
 
-        modelMatrix = glm::rotate(modelMatrix, 0.2f * deltaTime, glm::vec3(0.0f, 1.0f, 0.0f));
-        modelMatrix = glm::rotate(modelMatrix, 0.2f * deltaTime, glm::vec3(1.0f, 0.0f, 0.0f));
+        // Apply user-controlled rotation speeds from global variables
+        modelMatrix = glm::rotate(modelMatrix, rotSpeedX * deltaTime, glm::vec3(0.0f, 1.0f, 0.0f));
+        modelMatrix = glm::rotate(modelMatrix, rotSpeedY * deltaTime, glm::vec3(1.0f, 0.0f, 0.0f));
 
         glUniformMatrix4fv(glGetUniformLocation(shader.ID, "model"), 1, GL_FALSE, glm::value_ptr(modelMatrix));
         glUniformMatrix4fv(glGetUniformLocation(shader.ID, "view"), 1, GL_FALSE, glm::value_ptr(view));
         glUniformMatrix4fv(glGetUniformLocation(shader.ID, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+
+        // Update view matrix with user-controlled distance
+        view = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -viewDistance));
 
         model.Draw(shader.ID);
 
@@ -144,8 +195,97 @@ int main(int argc, char* argv[]) {
         // glBindVertexArray(VAO);
         // glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
 
+        // Draw ImGui UI elements
+        if (ImGui::BeginMainMenuBar()) {
+            if (ImGui::BeginMenu("File")) {
+                if (ImGui::MenuItem("Exit", "Alt+F4")) {
+                    running = false;
+                }
+                ImGui::EndMenu();
+            }
+
+            if (ImGui::BeginMenu("View")) {
+                static bool showWireframe = false;
+                if (ImGui::MenuItem("Wireframe", "Ctrl+Z")) {
+                    std::cout << "Toggle wireframe" << std::endl;
+                }
+                ImGui::EndMenu();
+            }
+
+            ImGui::EndMainMenuBar();
+        }
+
+        // Camera Controls panel (combined rotation + distance)
+        if (ImGui::Begin("Camera", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::SliderFloat("Rotation X Speed", &rotSpeedX, -5.0f, 5.0f);
+            ImGui::SliderFloat("Rotation Y Speed", &rotSpeedY, -5.0f, 5.0f);
+
+            ImGui::Separator();
+
+            ImGui::SliderFloat("View Distance Z", &viewDistance, 1.0f, 15.0f);
+
+            ImGui::Separator();
+
+            if (ImGui::Checkbox("Show Grid", &showGrid)) {
+                std::cout << "Grid visibility toggled" << std::endl;
+            }
+
+            ImGui::End();
+        } else {
+            // Window is collapsed - still need to call End() but with no content
+            ImGui::End();
+        }
+
+        // FPS counter and performance info (outside window scope to avoid crash on fold)
+        static int frameCount = 0;
+        static float fps = 0.0f;
+        if (++frameCount == 60) {
+            fps = 1.0f / deltaTime * frameCount / 60.0f;
+            frameCount = 0;
+        }
+
+        // Update lighting position from UI controls (use global variables, not static in window)
+        glUniform3f(glGetUniformLocation(shader.ID, "lightPos"), 0.0f, lightHeight, 0.0f);
+        
+        if (ImGui::Begin("Performance", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::Text("FPS: %.1f", fps);
+            ImGui::Separator();
+            ImGui::Text("Model: char.gltf");
+            ImGui::Text("Textures: container2.png, specular.png");
+            
+            ImGui::End();
+        } else {
+            // Window is collapsed - still need to call End() but with no content
+            ImGui::End();
+        }
+
+        // Lighting controls panel
+        if (ImGui::Begin("Lighting", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::SliderFloat("Light Height", &lightHeight, 1.0f, 10.0f);
+
+            ImGui::Separator();
+
+            if (ImGui::Checkbox("Use Specular Mapping", &useSpecular)) {
+                glUniform1i(glGetUniformLocation(shader.ID, "ourSpecular"),
+                    useSpecular ? 1 : 0);
+            }
+
+            ImGui::End();
+        } else {
+            // Window is collapsed - still need to call End() but with no content
+            ImGui::End();
+        }
+
+        // Render ImGui (SDL3 + OpenGL3 backend handles rendering)
+        ImGui::Render();
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
         SDL_GL_SwapWindow(window);
     }
+
+    // Shutdown ImGui
+    ImGui_ImplSDL3_Shutdown();
+    ImGui_ImplOpenGL3_Shutdown();
 
     return 0;
 }
