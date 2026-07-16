@@ -17,13 +17,17 @@
 static ImGuiContext* g_pImGuiCtx = nullptr;
 
 // Global UI state variables (moved from window scope to prevent crashes)
-static float rotSpeedX = 0.2f;
-static float rotSpeedY = 0.2f;
-static float camDist = 3.0f;
+static float cameraYaw = 0.0f;      // Horizontal rotation angle
+static float cameraPitch = 0.0f;    // Vertical rotation angle  
+static float orbitDistance = 3.0f;  // Distance from center for orbiting
 static float lightHeight = 5.0f;
-static float viewDistance = 3.0f;
 static bool showGrid = false;
 static bool useSpecular = true;
+
+// Mouse input tracking for orbit controls
+static int lastMouseX = 0;
+static int lastMouseY = 0;
+static Uint32 lastMouseTime = 0;
 
 int main(int argc, char* argv[]) {
     if (!SDL_Init(SDL_INIT_VIDEO)) {
@@ -150,14 +154,55 @@ int main(int argc, char* argv[]) {
     SDL_Event event;
     Uint64 lastTick = SDL_GetTicks();
 
+    // Mouse state tracking for orbit controls
+    static bool mouseDown = false;
+    static int mouseX = 0;
+    static int mouseY = 0;
+    static float lastYaw = cameraYaw;
+    static float lastPitch = cameraPitch;
+
     while (running) {
         // Handle events and process them through ImGui
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
             ImGui_ImplSDL3_ProcessEvent(&event);
+            
             if (event.type == SDL_EVENT_QUIT || 
                 event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED) {
                 running = false;
+            }
+            
+            // Mouse button events for orbit controls
+            if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN && event.button.button == SDL_BUTTON_LEFT) {
+                mouseDown = true;
+                mouseX = event.button.x;
+                mouseY = event.button.y;
+                lastYaw = cameraYaw;
+                lastPitch = cameraPitch;
+            }
+            
+            if (event.type == SDL_EVENT_MOUSE_BUTTON_UP && event.button.button == SDL_BUTTON_LEFT) {
+                mouseDown = false;
+            }
+            
+            // Mouse motion for orbit controls
+            if (event.type == SDL_EVENT_MOUSE_MOTION && mouseDown) {
+                int currentX = event.motion.x;
+                int currentY = event.motion.y;
+                
+                float deltaX = currentX - mouseX;
+                float deltaY = currentY - mouseY;
+                
+                // Convert pixel movement to rotation angles (degrees per pixel)
+                cameraYaw += deltaX * 0.5f;
+                cameraPitch -= deltaY * 0.5f;
+                
+                // Clamp pitch to prevent flipping over
+                if (cameraPitch > 89.0f) cameraPitch = 89.0f;
+                if (cameraPitch < -89.0f) cameraPitch = -89.0f;
+                
+                mouseX = currentX;
+                mouseY = currentY;
             }
         }
 
@@ -178,16 +223,14 @@ int main(int argc, char* argv[]) {
         float deltaTime = (SDL_GetTicks() - lastTick) / 1000.0f;
         lastTick = SDL_GetTicks();
 
-        // Apply user-controlled rotation speeds from global variables
-        modelMatrix = glm::rotate(modelMatrix, rotSpeedX * deltaTime, glm::vec3(0.0f, 1.0f, 0.0f));
-        modelMatrix = glm::rotate(modelMatrix, rotSpeedY * deltaTime, glm::vec3(1.0f, 0.0f, 0.0f));
-
         glUniformMatrix4fv(glGetUniformLocation(shader.ID, "model"), 1, GL_FALSE, glm::value_ptr(modelMatrix));
         glUniformMatrix4fv(glGetUniformLocation(shader.ID, "view"), 1, GL_FALSE, glm::value_ptr(view));
         glUniformMatrix4fv(glGetUniformLocation(shader.ID, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
 
-        // Update view matrix with user-controlled distance
-        view = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -viewDistance));
+        // Orbit camera: translate first then rotate (camera position in world space)
+        view = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -orbitDistance));
+        view = glm::rotate(view, glm::radians(cameraPitch), glm::vec3(1.0f, 0.0f, 0.0f));
+        view = glm::rotate(view, glm::radians(cameraYaw), glm::vec3(0.0f, 1.0f, 0.0f));
 
         model.Draw(shader.ID);
 
@@ -217,12 +260,19 @@ int main(int argc, char* argv[]) {
 
         // Camera Controls panel (combined rotation + distance)
         if (ImGui::Begin("Camera", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-            ImGui::SliderFloat("Rotation X Speed", &rotSpeedX, -5.0f, 5.0f);
-            ImGui::SliderFloat("Rotation Y Speed", &rotSpeedY, -5.0f, 5.0f);
+            // Orbit Controls section
+            ImGui::PushID("OrbitControls");
+            ImGui::Text("Orbit Camera:");
+            ImGui::SameLine();
+            ImGui::TextColored(ImVec4(0.2f, 0.8f, 0.2f, 1.0f), "Left Click + Drag to rotate");
+            
+            ImGui::SliderFloat("Yaw (Horizontal)", &cameraYaw, -360.0f, 360.0f);
+            ImGui::SliderFloat("Pitch (Vertical)", &cameraPitch, -90.0f, 90.0f);
+            ImGui::PopID();
 
             ImGui::Separator();
 
-            ImGui::SliderFloat("View Distance Z", &viewDistance, 1.0f, 15.0f);
+            ImGui::SliderFloat("Orbit Distance", &orbitDistance, 1.0f, 15.0f);
 
             ImGui::Separator();
 
