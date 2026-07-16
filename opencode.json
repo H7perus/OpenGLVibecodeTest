@@ -13,6 +13,9 @@
         },
         "google/gemma-4-12b-qat": {
           "name": "Gemma 4 12B QAT"
+        },
+        "unsloth/gemma-4-12b-it-qat": {
+          "name": "Unsloth Gemma 4 12B QAT"
         }
       }
     }

@@ -4,6 +4,8 @@
     "sdl3",
     "opengl",
     "glad",
-    "glm"
+    "glm",
+    "tinygltf",
+    "imgui"
   ]
 }
