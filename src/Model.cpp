@@ -1,7 +1,7 @@
 #include "Model.hpp"
 #include <iostream>
-#include <glm/glm.hpp>
-#include <glm/gtc/type_ptr.hpp>
+#include <cstring>  // For memcpy
+#include <vector>   // For std::vector
 
 // Define these only in *one* .cc file.
 #define TINYGLTF_IMPLEMENTATION
@@ -9,19 +9,30 @@
 #include <tiny_gltf.h>
 
 
-
-
-
 Model::Model(const std::string& path) {
     tinygltf::Model gltf_model;
     tinygltf::Scene scene;
     std::string err, warn;
 
-    if (!tinygltf::TinyGLTF().LoadASCIIFromFile(&gltf_model, &err, &warn, path)) {
-        std::cerr << "Failed to load model at: " << path << std::endl;
-        if (!err.empty()) std::cerr << "Err: " << err << std::endl;
-        if (!warn.empty()) std::cerr << "Warn: " << warn << std::endl;
-        return;
+    // Determine file type based on extension and load accordingly
+    bool isBinary = (path.size() > 4) && (path.substr(path.size() - 4) == ".glb");
+    
+    if (isBinary) {
+        // Load binary glTF (.glb) format - same signature as LoadASCIIFromFile
+        if (!tinygltf::TinyGLTF().LoadBinaryFromFile(&gltf_model, &err, &warn, path)) {
+            std::cerr << "Failed to load model at: " << path << std::endl;
+            if (!err.empty()) std::cerr << "Err: " << err << std::endl;
+            if (!warn.empty()) std::cerr << "Warn: " << warn << std::endl;
+            return;
+        }
+    } else {
+        // Load ASCII glTF (.gltf) format
+        if (!tinygltf::TinyGLTF().LoadASCIIFromFile(&gltf_model, &err, &warn, path)) {
+            std::cerr << "Failed to load model at: " << path << std::endl;
+            if (!err.empty()) std::cerr << "Err: " << err << std::endl;
+            if (!warn.empty()) std::cerr << "Warn: " << warn << std::endl;
+            return;
+        }
     }
 
     // Iterate over all meshes in the glTF model
@@ -39,19 +50,6 @@ Model::Model(const std::string& path) {
             }
 
             if (numVertices == 0) continue;
-
-            // Determine base stride from the first attribute we have (usually POSITION)
-            int baseStride = 0;
-            if (primitive.attributes.count("POSITION")) {
-                const auto& posBV = gltf_model.bufferViews[gltf_model.accessors[primitive.attributes.at("POSITION")].bufferView];
-                baseStride = (posBV.byteStride > 0) ? posBV.byteStride : (tinygltf::GetComponentSizeInBytes(gltf_model.accessors[primitive.attributes.at("POSITION")].componentType) * 3);
-            } else if (primitive.attributes.count("NORMAL")) {
-                const auto& normBV = gltf_model.bufferViews[gltf_model.accessors[primitive.attributes.at("NORMAL")].bufferView];
-                baseStride = (normBV.byteStride > 0) ? normBV.byteStride : (tinygltf::GetComponentSizeInBytes(gltf_model.accessors[primitive.attributes.at("NORMAL")].componentType) * 3);
-            } else if (primitive.attributes.count("TEXCOORD_0")) {
-                const auto& texBV = gltf_model.bufferViews[gltf_model.accessors[primitive.attributes.at("TEXCOORD_0")].bufferView];
-                baseStride = (texBV.byteStride > 0) ? texBV.byteStride : (tinygltf::GetComponentSizeInBytes(gltf_model.accessors[primitive.attributes.at("TEXCOORD_0")].componentType) * 2);
-            }
 
             std::vector<float> vertices(numVertices * 8);
 
@@ -105,29 +103,84 @@ Model::Model(const std::string& path) {
                 }
             }
 
-
-
-            std::cout << "--- Vertices ---" << std::endl;
-            for (size_t i = 0; i < vertices.size() / 8; ++i) {
-                std::cout << "Vertex " << i << ": "
-                          << vertices[i * 8 + 0] << ", " << vertices[i * 8 + 1] << ", " << vertices[i * 8 + 2] << " | "
-                          << vertices[i * 8 + 3] << ", " << vertices[i * 8 + 4] << " | "
-                          << vertices[i * 8 + 5] << ", " << vertices[i * 8 + 6] << ", " << vertices[i * 8 + 7] << std::endl;
+            // Load albedo texture from material (if available)
+            Texture* albedoTex = nullptr;
+            
+            if (primitive.material != -1 && static_cast<size_t>(primitive.material) < gltf_model.materials.size()) {
+                const tinygltf::Material& mat = gltf_model.materials[primitive.material];
+                
+                // Check for baseColorTexture first (embedded or external texture)
+                // In glTF, the texture is stored in material.pbrMetallicRoughness.baseColorTexture.index
+                if (mat.pbrMetallicRoughness.baseColorTexture.index >= 0) {
+                    int imageIdx = mat.pbrMetallicRoughness.baseColorTexture.index;
+                    
+                    if (static_cast<size_t>(imageIdx) < gltf_model.images.size()) {
+                        const tinygltf::Image& img = gltf_model.images[imageIdx];
+                        
+                        // Check if texture data is embedded in the glTF file
+                        std::vector<unsigned char> texData;
+                        
+                        if (!img.image.empty()) {
+                            // tiny_gltf stores decoded RGBA pixel data (not PNG bytes)
+                            int width = img.width > 0 ? static_cast<int>(img.width) : 1;
+                            int height = img.height > 0 ? static_cast<int>(img.height) : 1;
+                            
+                            texData.assign(img.image.begin(), img.image.end());
+                            
+                            if (width > 0 && height > 0) {
+                                albedoTex = new Texture(texData.data(), width, height);
+                                if (albedoTex->ID != 0) {
+                                    std::cout << "[DEBUG] Loaded embedded texture ID=" << albedoTex->ID << std::endl;
+                                } else {
+                                    std::cerr << "[ERROR] FAILED to load embedded texture" << std::endl;
+                                }
+                            } else {
+                                // Could not determine dimensions - fall back to baseColorFactor
+                                const auto& factor = mat.pbrMetallicRoughness.baseColorFactor;
+                                texData.resize(4);
+                                texData[0] = static_cast<unsigned char>(factor[0] * 255.0f);
+                                texData[1] = static_cast<unsigned char>(factor[1] * 255.0f);
+                                texData[2] = static_cast<unsigned char>(factor[2] * 255.0f);
+                                texData[3] = static_cast<unsigned char>(factor[3] * 255.0f);
+                                albedoTex = new Texture(texData.data(), 1, 1);
+                            }
+                        } else {
+                            // No embedded data - tiny_gltf should have already handled external textures during load
+                            // Create a 64x64 magenta/black grid fallback texture
+                            std::cout << "[DEBUG] Using magenta/black grid fallback texture" << std::endl;
+                            albedoTex = createGridTexture();
+                        }
+                    }
+                }
+                
+                // If no texture loaded, check baseColorFactor and create 1x1 texture
+                if (!albedoTex) {
+                    const auto& factor = mat.pbrMetallicRoughness.baseColorFactor;
+                    
+                    // Create a temporary buffer for the 1x1 texture data (RGBA)
+                    std::vector<unsigned char> texData(4);
+                    texData[0] = static_cast<unsigned char>(factor[0] * 255.0f);  // R
+                    texData[1] = static_cast<unsigned char>(factor[1] * 255.0f);  // G
+                    texData[2] = static_cast<unsigned char>(factor[2] * 255.0f);  // B
+                    texData[3] = static_cast<unsigned char>(factor[3] * 255.0f);  // A
+                    
+                    albedoTex = new Texture(texData.data(), 1, 1);
+                }
+            } else {
+                // No material assigned to primitive - use white fallback
+                std::vector<unsigned char> texData(4);
+                texData[0] = 255; texData[1] = 255; texData[2] = 255; texData[3] = 255;
+                
+                albedoTex = new Texture(texData.data(), 1, 1);
             }
+
+            // Store texture pointer in mesh struct
+            m.albedoTexturePtr = albedoTex;
 
             if (primitive.indices != -1) {
                 const tinygltf::Accessor& indexAccessor = gltf_model.accessors[primitive.indices];
                 const auto& indexBV = gltf_model.bufferViews[indexAccessor.bufferView];
                 const auto& indexBuffer = gltf_model.buffers[indexBV.buffer];
-
-                std::cout << "--- Index Buffer Reconstruction ---" << std::endl;
-                std::cout << "Buffer ID: " << indexBV.buffer << std::endl;
-                std::cout << "BufferView Offset: " << indexBV.byteOffset << ", Stride: " << indexBV.byteStride << std::endl;
-                std::cout << "Accessor Offset: " << indexAccessor.byteOffset << ", ComponentType: " << indexAccessor.componentType << std::endl;
-
-                // Calculate the base pointer to where indices start in this buffer view
-                const unsigned char* basePtr = indexBuffer.data.data() + indexBV.byteOffset + indexAccessor.byteOffset;
-                std::cout << "Base Pointer: " << (void*)basePtr << std::endl;
 
                 // Determine component size using tinygltf's helper function
                 int componentSize = tinygltf::GetComponentSizeInBytes(indexAccessor.componentType);
@@ -136,7 +189,6 @@ Model::Model(const std::string& path) {
                               << ". Defaulting to 4 bytes for debugging." << std::endl;
                     componentSize = 4;
                 }
-                std::cout << "Detected Component Size: " << componentSize << " bytes" << std::endl;
 
                 std::vector<uint32_t> indices;
                 indices.reserve(indexAccessor.count);
@@ -144,18 +196,13 @@ Model::Model(const std::string& path) {
                     size_t offset = (indexBV.byteStride > 0) ? (i * indexBV.byteStride) : (i * componentSize);
                     uint32_t val = 0;
                     if (componentSize == 2) {
-                        val = *reinterpret_cast<const uint16_t*>(basePtr + offset);
+                        val = *reinterpret_cast<const uint16_t*>(indexBuffer.data.data() + indexBV.byteOffset + indexAccessor.byteOffset + offset);
                     } else if (componentSize == 4) {
-                        val = *reinterpret_cast<const uint32_t*>(basePtr + offset);
+                        val = *reinterpret_cast<const uint32_t*>(indexBuffer.data.data() + indexBV.byteOffset + indexAccessor.byteOffset + offset);
                     } else {
                         val = 0; 
                     }
                     indices.push_back(val);
-                }
-
-                std::cout << "--- Indices ---" << std::endl;
-                for (unsigned int i = 0; i < indices.size(); ++i) {
-                    std::cout << "Index [" << i << "]: " << indices[i] << std::endl;
                 }
 
                 glGenBuffers(1, &m.EBO);
@@ -197,45 +244,79 @@ Model::Model(const std::string& path) {
 
 
             meshes.push_back(m);
-            std::cout << "Loaded mesh with " << m.indexCount << " indices." << std::endl;
+            
+            // Add texture to vector if it exists
+            if (albedoTex) {
+                albedoTextures.push_back(*albedoTex);
+            }
         }
     }
 }
 
-
 void Model::Draw(unsigned int shaderID) {
-    if (meshes.empty()) {
-        std::cerr << "DEBUG ERROR: No meshes were loaded in the model!" << std::endl;
-        return;
-    }
+    for (const auto& mesh : meshes) {
+        glActiveTexture(GL_TEXTURE0);
+        glUniform1i(glGetUniformLocation(shaderID, "u_albedoTexture"), 0);
+        glBindTexture(GL_TEXTURE_2D, mesh.albedoTexturePtr->ID);
 
-    for (size_t i = 0; i < meshes.size(); ++i) {
-        const auto& mesh = meshes[i];
         glBindVertexArray(mesh.VAO);
-
-        GLenum err = glGetError();
-        if (err != GL_NO_ERROR) {
-            std::cerr << "DEBUG ERROR: Error before glDrawElements: " << err << std::endl;
-        }
 
         if (mesh.EBO != 0) {
             glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.EBO);
         }
 
-        glDrawElements(GL_TRIANGLES, mesh.indexCount, GL_UNSIGNED_INT, 0);
-
-        err = glGetError();
-        if (err != GL_NO_ERROR) {
-            std::cerr << "DEBUG ERROR: Error after glDrawElements: " << err << std::endl;
-        }
+        glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(mesh.indexCount), GL_UNSIGNED_INT, 0);
     }
     glBindVertexArray(0);
 }
 
 Model::~Model() {
+    // Delete texture pointers in each mesh
     for (const auto& mesh : meshes) {
-        glDeleteVertexArrays(1, &mesh.VAO);
-        glDeleteBuffers(1, &mesh.VBO);
-        glDeleteBuffers(1, &mesh.EBO);
+        if (mesh.albedoTexturePtr) {
+            delete mesh.albedoTexturePtr;
+        }
     }
+
+    glDeleteVertexArrays(static_cast<GLsizei>(meshes.size()), reinterpret_cast<const GLuint*>(meshes.data()));
+    glDeleteBuffers(static_cast<GLsizei>(meshes.size()), reinterpret_cast<const GLuint*>(meshes.data()));
+    glDeleteBuffers(static_cast<GLsizei>(meshes.size()), reinterpret_cast<const GLuint*>(meshes.data()));
+}
+
+// Create a 64x64 magenta/black grid fallback texture
+Texture* Model::createGridTexture() {
+    const int gridSize = 8;
+    const int texSize = 64;
+    
+    // Generate grid pattern data (magenta on black)
+    std::vector<unsigned char> gridData(texSize * texSize * 4);
+    
+    for (int y = 0; y < texSize; ++y) {
+        for (int x = 0; x < texSize; ++x) {
+            int idx = (y * texSize + x) * 4;
+            
+            // Calculate grid cell position
+            int cellX = x / gridSize;
+            int cellY = y / gridSize;
+            
+            // Check if this is a magenta cell (even cells) or black (odd cells)
+            bool isMagenta = (cellX + cellY) % 2 == 0;
+            
+            if (isMagenta) {
+                // Magenta color: R=255, G=0, B=255, A=255
+                gridData[idx + 0] = 255;   // R
+                gridData[idx + 1] = 0;     // G
+                gridData[idx + 2] = 255;   // B
+                gridData[idx + 3] = 255;   // A
+            } else {
+                // Black color: R=0, G=0, B=0, A=255
+                gridData[idx + 0] = 0;     // R
+                gridData[idx + 1] = 0;     // G
+                gridData[idx + 2] = 0;     // B
+                gridData[idx + 3] = 255;   // A
+            }
+        }
+    }
+    
+    return new Texture(gridData.data(), texSize, texSize);
 }

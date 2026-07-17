@@ -22,7 +22,6 @@ static float cameraPitch = 0.0f;    // Vertical rotation angle
 static float orbitDistance = 3.0f;  // Distance from center for orbiting
 static float lightHeight = 5.0f;
 static bool showGrid = false;
-static bool useSpecular = true;
 
 // Mouse input tracking for orbit controls
 static int lastMouseX = 0;
@@ -70,10 +69,7 @@ int main(int argc, char* argv[]) {
 
     glEnable(GL_DEPTH_TEST);
     Shader shader("shaders/vertex.glsl", "shaders/fragment.glsl");
-    Texture texture("assets/textures/container2.png");
-    Texture specularTexture("assets/textures/container2_specular.png");
-
-    Model model("assets/models/char.gltf");
+    Model model("assets/models/cube.glb");
 
     std::vector<float> vertices;
     // Each face: 4 vertices (pos_x, pos_y, pos_z, tex_x, tex_y, norm_x, norm_y, norm_z)
@@ -140,13 +136,6 @@ int main(int argc, char* argv[]) {
     view = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -3.0f));
 
     glUseProgram(shader.ID);
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, texture.ID);
-    glUniform1i(glGetUniformLocation(shader.ID, "ourTexture"), 0);
-    glActiveTexture(GL_TEXTURE1);
-    glBindTexture(GL_TEXTURE_2D, specularTexture.ID);
-    glUniform1i(glGetUniformLocation(shader.ID, "ourSpecular"), 1);
-
     glUniform3f(glGetUniformLocation(shader.ID, "lightPos"), 0.0f, 5.0f, 0.0f);
     glUniform3f(glGetUniformLocation(shader.ID, "viewPos"), 0.0f, 0.0f, 3.0f);
 
@@ -300,8 +289,8 @@ int main(int argc, char* argv[]) {
         if (ImGui::Begin("Performance", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
             ImGui::Text("FPS: %.1f", fps);
             ImGui::Separator();
-            ImGui::Text("Model: char.gltf");
-            ImGui::Text("Textures: container2.png, specular.png");
+            ImGui::Text("Model: cube.gltf");
+            ImGui::Text("Textures: Embedded PNG from glTF");
             
             ImGui::End();
         } else {
@@ -315,10 +304,7 @@ int main(int argc, char* argv[]) {
 
             ImGui::Separator();
 
-            if (ImGui::Checkbox("Use Specular Mapping", &useSpecular)) {
-                glUniform1i(glGetUniformLocation(shader.ID, "ourSpecular"),
-                    useSpecular ? 1 : 0);
-            }
+            ImGui::Text("Textures: Embedded albedo texture");
 
             ImGui::End();
         } else {

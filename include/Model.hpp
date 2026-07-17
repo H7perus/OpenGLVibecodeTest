@@ -3,6 +3,7 @@
 
 #include <string>
 #include <vector>
+#include <vector>
 #include <glad/glad.h>
 #include "Texture.hpp"
 
@@ -12,6 +13,8 @@ public:
     ~Model();
 
     void Draw(unsigned int shaderID);
+    
+    Texture* createGridTexture();  // Helper for fallback texture generation
 
 private:
     struct Mesh {
@@ -19,10 +22,11 @@ private:
         unsigned int VBO;
         unsigned int EBO;
         size_t indexCount;
+        Texture* albedoTexturePtr;  // Pointer to per-mesh albedo texture (can be nullptr)
     };
 
     std::vector<Mesh> meshes;
-    // Add other members as needed (e.g., textures)
+    std::vector<Texture> albedoTextures;  // Per-mesh albedo textures
 };
 
 #endif

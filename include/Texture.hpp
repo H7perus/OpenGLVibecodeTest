@@ -9,6 +9,7 @@ class Texture {
 public:
     unsigned int ID;
     Texture(const std::string& path);
+    Texture(unsigned char* imageData, int width, int height);  // For embedded RGBA pixel data (decoded by tiny_gltf or baseColorFactor fallback)
     ~Texture();
 
 private:

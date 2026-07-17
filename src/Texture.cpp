@@ -1,6 +1,5 @@
 #include "Texture.hpp"
 #include <iostream>
-#include <fstream>
 #include <vector>
 #include <string>
 #include <glad/glad.h>
@@ -8,8 +7,33 @@
 #include <stb_image.h>
 
 Texture::Texture(const std::string& path) {
-
     ID = loadTexture(path);
+}
+
+// New constructor for embedded RGBA pixel data (already decoded by tiny_gltf)
+Texture::Texture(unsigned char* imageData, int width, int height) {
+    unsigned int textureID;
+    glGenTextures(1, &textureID);
+    glBindTexture(GL_TEXTURE_2D, textureID);
+    
+    if (imageData == nullptr || width <= 0 || height <= 0) {
+        std::cerr << "[Texture] ERROR: Null or invalid image dimensions" << std::endl;
+        glDeleteTextures(1, &textureID);
+        return;
+    }
+    
+    // tiny_gltf stores decoded RGBA pixel data (not PNG bytes)
+    // Upload directly with GL_RGBA format - OpenGL handles the channel order correctly
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, imageData);
+    
+    // Set texture parameters for nearest-neighbor filtering (no mipmaps)
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    
+    ID = textureID;
+    glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 Texture::~Texture() {
